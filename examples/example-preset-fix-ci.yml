@@ -23,6 +23,7 @@ jobs:
       contents: write
       pull-requests: write
       actions: read
+      id-token: write # required: the action mints a GitHub App token via OIDC
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

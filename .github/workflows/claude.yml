@@ -33,6 +33,9 @@ jobs:
       contents: read
       pull-requests: read
       issues: read
+      # The wrapped action exchanges a GitHub OIDC token for a GitHub App token
+      # on every run, and fails without this.
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -54,8 +57,12 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      # The action's own token is the app token above, so these scope
+      # GITHUB_TOKEN and the checkout, not what Claude can do.
       contents: read
       pull-requests: read
+      # Required: the action mints a GitHub App token via OIDC every run.
+      id-token: write
     # Pushes re-trigger `synchronize`; a superseded review is wasted spend.
     concurrency:
       group: claude-auto-review-${{ github.event.pull_request.number }}

@@ -32,6 +32,7 @@ jobs:
       pull-requests: read
       issues: read
       actions: read # lets Claude read CI results on a pull request
+      id-token: write # required: the action mints a GitHub App token via OIDC
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

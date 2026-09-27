@@ -216,6 +216,37 @@ if [ -s "$SELF_WORKFLOW" ]; then
   # be setting it.
   assert_not_contains "$(cat "$SELF_WORKFLOW")" "app_attribution" \
     "the self-workflow does not set attribution itself"
+  # Every job here calls the wrapped action, which exchanges an OIDC token for a
+  # GitHub App token. A job that forgets `id-token: write` fails at runtime with
+  # an error that reads like a credential problem, not a permissions one.
+  SELF_JOBS=$(python3 -c "
+import yaml
+d=yaml.safe_load(open('$SELF_WORKFLOW'))
+for name,job in d['jobs'].items():
+    print(f\"{name}={'write' if (job.get('permissions') or {}).get('id-token')=='write' else 'MISSING'}\")
+")
+  while IFS='=' read -r job state; do
+    [ -n "$job" ] || continue
+    if [ "$state" = "write" ]; then
+      _pass "self-workflow job '$job' grants id-token: write"
+    else
+      _fail "self-workflow job '$job' grants id-token: write" "the action cannot run without it"
+    fi
+  done <<< "$SELF_JOBS"
+
+  # An example that omits it ships a workflow that cannot run.
+  for example in "$REPO_ROOT"/examples/*.yml; do
+    if python3 -c "
+import sys,yaml
+d=yaml.safe_load(open(sys.argv[1]))
+jobs=d.get('jobs') or {}
+sys.exit(0 if jobs and all((j.get('permissions') or {}).get('id-token')=='write' for j in jobs.values()) else 1)
+" "$example"; then
+      _pass "$(basename "$example") grants id-token: write"
+    else
+      _fail "$(basename "$example") grants id-token: write" "the example cannot run without it"
+    fi
+  done
 else
   _fail ".github/workflows/claude.yml exists" "missing or empty"
 fi
