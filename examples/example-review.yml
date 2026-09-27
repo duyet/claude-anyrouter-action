@@ -1,0 +1,54 @@
+# Automated pull request review.
+#
+# Triggers on its own, without waiting for an @claude mention. Because the
+# review body is attacker-controlled, the job runs with read-only permissions
+# and Claude has no way to push changes or post comments.
+
+name: Claude PR Review (AnyRouter)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code review
+        uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          app_attribution: ${{ github.server_url }}/${{ github.repository }}
+
+          # Pin a specific model instead of the gateway's auto router, so review
+          # cost and behaviour stay predictable.
+          model: anyrouter/auto
+
+          prompt: |
+            Review this pull request for correctness, security, and regressions.
+
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            HEAD SHA: ${{ github.event.pull_request.head.sha }}
+
+            Focus on:
+            - Logic errors and unhandled edge cases
+            - Security issues, especially input handling and secret exposure
+            - Missing or misleading tests
+
+            Do not modify any files. Report your findings as inline review
+            comments on the lines they apply to.
+
+          claude_args: |
+            --max-turns 15

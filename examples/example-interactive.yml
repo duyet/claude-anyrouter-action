@@ -1,0 +1,55 @@
+# Interactive: mention @claude in an issue, PR, or review comment.
+#
+# Claude answers the comment that tagged it, and can act on the repository
+# (edit files, push branches, post follow-up comments) within the permissions
+# granted below.
+
+name: Claude Interactive (AnyRouter)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+permissions:
+  contents: read
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read # lets Claude read CI results on a pull request
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          app_attribution: ${{ github.server_url }}/${{ github.repository }}
+
+          # Let Claude read CI results so it can act on a red build.
+          additional_permissions: |
+            actions: read
+
+          # Optional: constrain what Claude is allowed to do without it having
+          # to ask. See https://code.claude.com/docs/en/cli-reference
+          # claude_args: |
+          #   --max-turns 20
+          #   --allowedTools "Bash(gh pr:*)" "Bash(gh issue:*)" Read
