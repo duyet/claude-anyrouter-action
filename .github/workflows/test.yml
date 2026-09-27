@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The tests parse YAML and the GitHub Actions environment-file format, so
+      # python3 is the only tool needed beyond the runner image.
+      - name: Validate action.yml
+        run: ./tests/test-action-validation.sh
+
+      - name: Verify AnyRouter environment mapping
+        run: ./tests/test-env-mapping.sh
