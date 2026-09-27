@@ -1,0 +1,94 @@
+name: "Claude Code (AnyRouter)"
+description: "Run anthropics/claude-code-action against the AnyRouter gateway with ANTHROPIC_* configuration applied automatically."
+author: "duyet"
+
+branding:
+  icon: "zap"
+  color: "purple"
+
+inputs:
+  anyrouter_api_key:
+    description: "AnyRouter API key. Exported to Claude Code as ANTHROPIC_AUTH_TOKEN, which the gateway receives as an `Authorization: Bearer` header."
+    required: true
+
+  anyrouter_base_url:
+    description: "AnyRouter Anthropic-compatible base URL."
+    required: false
+    default: "https://anyrouter.dev/api/v1"
+
+  model:
+    description: "Model id to route to. Exported as ANTHROPIC_MODEL and, so that subagents and the /model picker resolve too, as all three ANTHROPIC_DEFAULT_*_MODEL aliases. Set to an empty string to leave Claude Code's own default in place."
+    required: false
+    default: "anyrouter/auto"
+
+  use_oauth:
+    description: "Authenticate with the official Claude Code OAuth token instead of AnyRouter. When 'true', no ANTHROPIC_* routing variables are written and claude_code_oauth_token is forwarded to the wrapped action."
+    required: false
+    default: "false"
+
+  claude_code_oauth_token:
+    description: "Claude Code OAuth token. Only used when use_oauth is 'true'."
+    required: false
+    default: ""
+
+  prompt:
+    description: "Instructions for Claude. When empty, Claude performs the instructions from the comment or review body that tagged it."
+    required: false
+    default: ""
+
+  claude_args:
+    description: "Additional arguments passed to the Claude Code CLI. See https://code.claude.com/docs/en/cli-reference. Note that the `model` input takes precedence over a --model flag set here."
+    required: false
+    default: ""
+
+  additional_permissions:
+    description: "Additional GitHub permissions to request (e.g. 'actions: read' to let Claude read CI results on a pull request)."
+    required: false
+    default: ""
+
+  app_attribution:
+    description: "App URL to attribute this traffic to in AnyRouter's public rankings, sent as the HTTP-Referer header. See https://docs.anyrouter.dev/features/app-attribution. Leave empty to send no attribution header."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AnyRouter
+      if: inputs.use_oauth != 'true'
+      shell: bash
+      env:
+        ANYROUTER_API_KEY: ${{ inputs.anyrouter_api_key }}
+        ANYROUTER_BASE_URL: ${{ inputs.anyrouter_base_url }}
+        ANYROUTER_MODEL: ${{ inputs.model }}
+        ANYROUTER_APP_ATTRIBUTION: ${{ inputs.app_attribution }}
+      run: "${{ github.action_path }}/scripts/configure-anyrouter.sh"
+
+    - name: Run Claude Code
+      id: claude
+      uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1
+      with:
+        prompt: ${{ inputs.prompt }}
+        claude_args: ${{ inputs.claude_args }}
+        additional_permissions: ${{ inputs.additional_permissions }}
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+
+outputs:
+  conclusion:
+    description: "Execution status of Claude Code ('success' or 'failure')"
+    value: ${{ steps.claude.outputs.conclusion }}
+  execution_file:
+    description: "Path to the Claude Code execution output file"
+    value: ${{ steps.claude.outputs.execution_file }}
+  branch_name:
+    description: "Branch created by Claude Code for this execution"
+    value: ${{ steps.claude.outputs.branch_name }}
+  github_token:
+    description: "The GitHub token used by the action (Claude App token if available)"
+    value: ${{ steps.claude.outputs.github_token }}
+  structured_output:
+    description: "JSON string of all structured output fields when --json-schema is provided in claude_args"
+    value: ${{ steps.claude.outputs.structured_output }}
+  session_id:
+    description: "Claude Code session ID, usable with --resume to continue the conversation"
+    value: ${{ steps.claude.outputs.session_id }}
