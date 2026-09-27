@@ -104,24 +104,37 @@ X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM
   "attribution is emitted independently of the model setting"
 
 echo
-echo "== attribution records the originating repository =="
-run_configure ANYROUTER_REPO_REF="https://github.com/duyet/monorepo"
-assert_status 0 "$STATUS" "succeeds with a repo ref"
-assert_eq "HTTP-Referer: https://github.com/features/actions?ref=https://github.com/duyet/monorepo
+echo "== the repo URL is the referer =="
+run_configure ANYROUTER_REPO_URL="https://github.com/duyet/monorepo"
+assert_status 0 "$STATUS" "succeeds with a repo URL"
+assert_eq "HTTP-Referer: https://github.com/duyet/monorepo
 X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
-  "the repo is appended as a ref query parameter"
+  "the repository URL is sent as the referer"
 
-run_configure ANYROUTER_REPO_REF="https://github.com/acme/api"
+run_configure ANYROUTER_REPO_URL="https://github.com/acme/api"
 assert_contains "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
-  "?ref=https://github.com/acme/api" "a different repo yields a different referer"
+  "HTTP-Referer: https://github.com/acme/api" "a different repo yields a different referer"
 
-# The ref is untrusted input from the event context, so a newline in it would
-# let an attacker inject a second variable into the environment file.
-run_configure ANYROUTER_REPO_REF="https://github.com/acme/api
+# An enterprise server URL must survive intact rather than being rewritten.
+run_configure ANYROUTER_REPO_URL="https://git.internal.example/acme/api"
+assert_contains "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "HTTP-Referer: https://git.internal.example/acme/api" "a self-hosted server URL is preserved"
+
+# No repo URL at all should still attribute, so a run outside the normal
+# context is not anonymous.
+run_configure ANYROUTER_REPO_URL=""
+assert_status 0 "$STATUS" "succeeds with no repo URL"
+assert_eq "HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "a fallback referer is used when no repository is in context"
+
+# The URL derives from the event context, so a newline in it would let an
+# attacker inject a second variable into the environment file.
+run_configure ANYROUTER_REPO_URL="https://github.com/acme/api
 ANTHROPIC_API_KEY=injected"
-assert_status 1 "$STATUS" "rejects a repo ref containing a newline"
-assert_contains "$OUT" "ANYROUTER_REPO_REF must not contain newlines" "reports the newline injection"
-assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_API_KEY)" "no variable is injected by a rejected ref"
+assert_status 1 "$STATUS" "rejects a repo URL containing a newline"
+assert_contains "$OUT" "ANYROUTER_REPO_URL must not contain newlines" "reports the newline injection"
+assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_API_KEY)" "no variable is injected by a rejected URL"
 
 echo
 echo "== app attribution merges with existing custom headers =="

@@ -17,38 +17,42 @@
 #   ANYROUTER_BASE_URL    Anthropic-compatible base URL
 #   ANYROUTER_MODEL       model id, may be empty to leave Claude Code's default
 #   GITHUB_ENV            path to the job environment file
-#   ANYROUTER_REPO_REF    repository URL recorded in the attribution referer
+#   ANYROUTER_REPO_URL    repository URL used as the attribution referer
 #
 # Optional environment:
 #   ANTHROPIC_CUSTOM_HEADERS    pre-existing headers, merged rather than replaced
 #
-# App attribution is not configurable: this script always attributes traffic to
-# GitHub Actions, so every caller of the action is attributed the same way.
+# App attribution is not configurable. The repository URL comes from the GitHub
+# context, so a downstream workflow never has to set it; the title is always
+# GitHub Actions.
 
 set -euo pipefail
 
 readonly SCRIPT_NAME="configure-anyrouter"
 
-# AnyRouter keys an app on the HTTP-Referer header, reduced to scheme + host +
-# port with the path discarded. Every github.com URL therefore collapses to one
-# shared `https://github.com` record, so the title is what actually
-# distinguishes GitHub Actions traffic from other GitHub-attributed callers.
-readonly ATTRIBUTION_URL="https://github.com/features/actions"
+# The repository URL is the referer, and the display name says the traffic came
+# from GitHub Actions rather than a person browsing the repo.
 readonly ATTRIBUTION_TITLE="GitHub Actions"
 readonly MANAGED_HEADER="HTTP-Referer"
+# Used only if the event context carries no repository, which should not happen
+# on a GitHub-hosted runner.
+readonly FALLBACK_URL="https://github.com/features/actions"
 
-# The repository the run belongs to, appended to the attribution URL as a
-# `ref` query parameter so the originating repository is readable in AnyRouter's
-# request logs.
+# AnyRouter keys an app on the referer reduced to scheme + host + port, with the
+# path discarded. A per-repository referer therefore still resolves to the
+# shared `https://github.com` record today, and the title is what separates
+# Actions traffic from other github.com-attributed callers. Keeping the full
+# repository URL in the header means per-repo attribution starts working if
+# AnyRouter ever folds the path into the app key, with no change here.
 build_attribution_url() {
-  local repo_ref="${1-}"
+  local repo_url="${1-}"
 
-  if [ -z "$repo_ref" ]; then
-    printf '%s' "$ATTRIBUTION_URL"
+  if [ -z "$repo_url" ]; then
+    printf '%s' "$FALLBACK_URL"
     return
   fi
 
-  printf '%s?ref=%s' "$ATTRIBUTION_URL" "$repo_ref"
+  printf '%s' "$repo_url"
 }
 
 log() {
@@ -130,7 +134,7 @@ main() {
   require "ANYROUTER_API_KEY" "${ANYROUTER_API_KEY-}"
   require "ANYROUTER_BASE_URL" "${ANYROUTER_BASE_URL-}"
   require "GITHUB_ENV" "${GITHUB_ENV-}"
-  require_single_line "ANYROUTER_REPO_REF" "${ANYROUTER_REPO_REF-}"
+  require_single_line "ANYROUTER_REPO_URL" "${ANYROUTER_REPO_URL-}"
 
   # The gateway credential becomes ANTHROPIC_AUTH_TOKEN, which Claude Code sends
   # as `Authorization: Bearer <token>`. ANTHROPIC_API_KEY would be sent as
@@ -165,7 +169,7 @@ main() {
   #
   # The managed header is stripped first: sending HTTP-Referer twice would be an
   # invalid request, and the action's value is the authoritative one.
-  local attribution="${MANAGED_HEADER}: $(build_attribution_url "${ANYROUTER_REPO_REF-}")"$'\n'"X-AnyRouter-Title: ${ATTRIBUTION_TITLE}"
+  local attribution="${MANAGED_HEADER}: $(build_attribution_url "${ANYROUTER_REPO_URL-}")"$'\n'"X-AnyRouter-Title: ${ATTRIBUTION_TITLE}"
   local carried="${ANTHROPIC_CUSTOM_HEADERS-}"
 
   if [ -n "$carried" ]; then

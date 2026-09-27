@@ -114,15 +114,22 @@ The repository is appended as a `ref` query parameter, derived automatically
 from the event context, so you do not configure it:
 
 ```
-HTTP-Referer: https://github.com/features/actions?ref=https://github.com/duyet/monorepo
+HTTP-Referer: https://github.com/duyet/monorepo
 X-AnyRouter-Title: GitHub Actions
 ```
 
-Query parameters are not part of AnyRouter's dedup key — it reduces the referer
-to scheme, host, and port — so `ref` is recorded for per-request traceability
-rather than as a separate app record.
+The referer is the repository the run belongs to, taken from the GitHub
+context, so a downstream workflow never has to configure it. The title always
+says GitHub Actions.
+
+Note that AnyRouter reduces the referer to scheme, host, and port today, so
+every repository still resolves to one shared `https://github.com` record and
+the title is what separates this traffic from other github.com-attributed
+callers. Sending the full repository URL anyway means per-repository
+attribution starts working unchanged if AnyRouter folds the path into the app
+key.
 [duyet/anyrouter#3648](https://github.com/duyet/anyrouter/issues/3648) tracks
-first-class GitHub Actions attribution and per-repo analytics.
+first-class GitHub Actions attribution and per-repository analytics.
 
 These headers are appended to any `ANTHROPIC_CUSTOM_HEADERS` the workflow
 already declares, so you can still add `X-AnyRouter-Categories` or

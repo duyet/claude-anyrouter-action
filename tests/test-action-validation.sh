@@ -58,16 +58,16 @@ assert_eq "inputs.use_oauth != 'true'" \
   "step 1 is skipped when use_oauth is true"
 
 STEP1_ENV="$(eval_yaml '" ".join(sorted(doc["runs"]["steps"][0]["env"]))')"
-for var in ANYROUTER_API_KEY ANYROUTER_BASE_URL ANYROUTER_MODEL ANYROUTER_REPO_REF; do
+for var in ANYROUTER_API_KEY ANYROUTER_BASE_URL ANYROUTER_MODEL ANYROUTER_REPO_URL; do
   assert_contains "$STEP1_ENV" "$var" "step 1 passes $var to the script"
 done
 assert_eq "4" "$(eval_yaml 'len(doc["runs"]["steps"][0]["env"])')" "step 1 forwards exactly 4 variables"
 
-# The repo ref comes from the event context, so the action derives it rather
-# than making each caller repeat it.
+# The repo URL comes from the event context, so a downstream workflow never
+# has to set the attribution itself.
 assert_eq '${{ github.server_url }}/${{ github.repository }}' \
-  "$(eval_yaml 'doc["runs"]["steps"][0]["env"]["ANYROUTER_REPO_REF"]')" \
-  "the repo ref is derived from the GitHub context"
+  "$(eval_yaml 'doc["runs"]["steps"][0]["env"]["ANYROUTER_REPO_URL"]')" \
+  "the repo URL is derived from the GitHub context"
 
 echo
 echo "== step 2: Run Claude Code =="
