@@ -80,3 +80,6 @@ jobs:
 
           # Supplies the review prompt, the turn limit, and `actions: read`.
           preset: review
+
+          # TEMP DIAGNOSTIC - revert
+          show_full_output: "true"
