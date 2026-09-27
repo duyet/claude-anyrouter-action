@@ -167,6 +167,23 @@ throwaway environment file, so the mapping is verified by execution rather than
 by grepping the YAML. Both scripts are dependency-free apart from `python3`
 (for YAML and environment-file parsing) and `jq` is not required.
 
+Both run in CI on every push and pull request.
+
+## Releases
+
+[Release Please](https://github.com/googleapis/release-please) watches
+conventional commits on `main` and maintains a standing release PR that humans
+merge. It tags `vX.Y.Z` and updates `CHANGELOG.md`.
+
+Pre-1.0 bump rules: a `feat` bumps the **patch**, and only a breaking change
+(`feat!` or a `BREAKING CHANGE` footer) cuts a minor. That keeps a new input or
+a behavioural tweak from implying API stability the action does not have yet.
+
+Downstream workflows can pin `duyet/claude-anyrouter-action@v0.1.0` or track
+`@main`. Note that the wrapped `anthropics/claude-code-action` is pinned to a
+commit inside this action, so a version bump of this action is the way to pick
+up an upstream change.
+
 ## License
 
 [MIT](./LICENSE)

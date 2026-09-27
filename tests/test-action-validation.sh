@@ -132,7 +132,7 @@ else
   _fail "scripts/configure-anyrouter.sh parses" "$(bash -n "$SCRIPT" 2>&1)"
 fi
 
-for file in README.md LICENSE .gitignore examples/example-interactive.yml examples/example-review.yml; do
+for file in README.md LICENSE CHANGELOG.md .gitignore examples/example-interactive.yml examples/example-review.yml; do
   if [ -s "$REPO_ROOT/$file" ]; then
     _pass "$file exists and is non-empty"
   else
@@ -150,8 +150,64 @@ if [ -s "$SELF_WORKFLOW" ]; then
     "the self-workflow uses this action"
   assert_contains "$(cat "$SELF_WORKFLOW")" "anyrouter_api_key: \${{ secrets.ANYROUTER_API_KEY }}" \
     "the self-workflow supplies the credential from a secret"
+  # Attribution is derived inside the action, so a downstream workflow must not
+  # be setting it.
+  assert_not_contains "$(cat "$SELF_WORKFLOW")" "app_attribution" \
+    "the self-workflow does not set attribution itself"
 else
   _fail ".github/workflows/claude.yml exists" "missing or empty"
+fi
+
+echo
+echo "== release automation =="
+RP_CONFIG="$REPO_ROOT/.github/release-please-config.json"
+RP_MANIFEST="$REPO_ROOT/.github/.release-please-manifest.json"
+RP_WORKFLOW="$REPO_ROOT/.github/workflows/release-please.yml"
+
+for file in "$RP_CONFIG" "$RP_MANIFEST" "$RP_WORKFLOW"; do
+  if [ -s "$file" ]; then
+    _pass "$(basename "$file") exists and is non-empty"
+  else
+    _fail "$(basename "$file") exists and is non-empty" "missing or empty"
+  fi
+done
+
+if [ -s "$RP_CONFIG" ] && [ -s "$RP_MANIFEST" ]; then
+  if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$RP_CONFIG" 2>/dev/null &&
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$RP_MANIFEST" 2>/dev/null; then
+    _pass "release-please config and manifest are valid JSON"
+  else
+    _fail "release-please config and manifest are valid JSON" "malformed JSON"
+  fi
+
+  # A version disagreement between the two files produces a wrong tag.
+  assert_eq "$(python3 -c "import json;print(json.load(open('$RP_CONFIG'))['packages']['.']['changelog-path'])")" \
+    "CHANGELOG.md" "config points at the changelog this repo has"
+  assert_eq "0.1.0" \
+    "$(python3 -c "import json;print(json.load(open('$RP_MANIFEST'))['.'])")" \
+    "manifest starts at the initial version"
+
+  if python3 -c "
+import json,sys
+sections=json.load(open('$RP_CONFIG'))['packages']['.']['changelog-sections']
+types={s['type'] for s in sections}
+missing={'feat','fix','refactor'}-types
+sys.exit(1 if missing else 0)
+" 2>/dev/null; then
+    _pass "changelog sections cover the conventional types used here"
+  else
+    _fail "changelog sections cover the conventional types used here" "missing a type"
+  fi
+fi
+
+if [ -s "$RP_WORKFLOW" ]; then
+  # release-please needs to write, and a floating action ref would not hold.
+  assert_contains "$(cat "$RP_WORKFLOW")" "contents: write" "release-please has contents: write"
+  assert_contains "$(cat "$RP_WORKFLOW")" "pull-requests: write" "release-please has pull-requests: write"
+  assert_contains "$(cat "$RP_WORKFLOW")" "release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7" \
+    "release-please is pinned to an immutable commit"
+  assert_contains "$(cat "$RP_WORKFLOW")" "config-file: .github/release-please-config.json" \
+    "the workflow points at the committed config"
 fi
 
 summary "test-action-validation"
