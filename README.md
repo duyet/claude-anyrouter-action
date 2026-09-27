@@ -35,7 +35,6 @@ jobs:
       - uses: duyet/claude-anyrouter-action@main
         with:
           anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
-          app_attribution: https://github.com/your-org/your-repo
 ```
 
 See [`examples/`](./examples) for interactive and code-review workflows.
@@ -52,7 +51,6 @@ See [`examples/`](./examples) for interactive and code-review workflows.
 | `prompt` | no | `""` | Instructions. Empty uses the comment that tagged Claude. |
 | `claude_args` | no | `""` | Extra [Claude Code CLI arguments](https://code.claude.com/docs/en/cli-reference). |
 | `additional_permissions` | no | `""` | Extra GitHub permissions, e.g. `actions: read`. |
-| `app_attribution` | no | `""` | App URL for AnyRouter rankings, sent as `HTTP-Referer`. |
 
 ## Outputs
 
@@ -72,7 +70,7 @@ When `use_oauth` is `false` (the default) the first step appends to
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `model` | Resolves the `sonnet` alias. |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | `model` | Resolves the `opus` alias. |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `model` | Resolves the `haiku` alias. |
-| `ANTHROPIC_CUSTOM_HEADERS` | `HTTP-Referer: <app_attribution>` | Only when `app_attribution` is set. |
+| `ANTHROPIC_CUSTOM_HEADERS` | `HTTP-Referer` + `X-AnyRouter-Title` | Always. See [Attribution](#attribution). |
 
 A few deliberate details:
 
@@ -87,6 +85,25 @@ A few deliberate details:
   to Claude Code's own default.
 - **The key is never logged.** The script registers it with `::add-mask::`
   before use, and no log line echoes it.
+
+## Attribution
+
+Traffic is always attributed to GitHub Actions, with no configuration:
+
+```
+HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions
+```
+
+AnyRouter keys an app on the referer reduced to scheme, host, and port with the
+path discarded, so every GitHub URL collapses to a single shared
+`https://github.com` record. The title is therefore what actually separates
+GitHub Actions traffic from other callers attributing to a `github.com` URL.
+
+These headers are appended to any `ANTHROPIC_CUSTOM_HEADERS` the workflow
+already declares, so you can still add `X-AnyRouter-Categories` or
+`X-AnyRouter-Source` yourself. A referer the workflow sets is replaced rather
+than sent twice, which would be an invalid request.
 
 ## Notes and caveats
 

@@ -19,12 +19,22 @@
 #   GITHUB_ENV            path to the job environment file
 #
 # Optional environment:
-#   ANYROUTER_APP_ATTRIBUTION   app URL, sent as the HTTP-Referer header
 #   ANTHROPIC_CUSTOM_HEADERS    pre-existing headers, merged rather than replaced
+#
+# App attribution is not configurable: this script always attributes traffic to
+# GitHub Actions, so every caller of the action is attributed the same way.
 
 set -euo pipefail
 
 readonly SCRIPT_NAME="configure-anyrouter"
+
+# AnyRouter keys an app on the HTTP-Referer header, reduced to scheme + host +
+# port with the path discarded. Every github.com URL therefore collapses to one
+# shared `https://github.com` record, so the title is what actually
+# distinguishes GitHub Actions traffic from other GitHub-attributed callers.
+readonly ATTRIBUTION_URL="https://github.com/features/actions"
+readonly ATTRIBUTION_TITLE="GitHub Actions"
+readonly MANAGED_HEADER="HTTP-Referer"
 
 log() {
   printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
@@ -111,17 +121,25 @@ main() {
     export_var "ANTHROPIC_DEFAULT_HAIKU_MODEL" "$model"
   fi
 
-  # AnyRouter attributes an app by its HTTP-Referer header. Claude Code forwards
-  # ANTHROPIC_CUSTOM_HEADERS verbatim, so the app URL is appended to any
-  # headers the workflow already declared rather than replacing them.
-  local attribution="${ANYROUTER_APP_ATTRIBUTION-}"
-  if [ -n "$attribution" ]; then
-    local existing="${ANTHROPIC_CUSTOM_HEADERS-}"
-    if [ -n "$existing" ]; then
-      export_multiline_var "ANTHROPIC_CUSTOM_HEADERS" "${existing}"$'\n'"HTTP-Referer: ${attribution}"
+  # Attribute this traffic to GitHub Actions in AnyRouter's public rankings.
+  # Claude Code forwards ANTHROPIC_CUSTOM_HEADERS verbatim, so the attribution
+  # headers are merged with any the workflow already declared.
+  #
+  # The managed header is stripped first: sending HTTP-Referer twice would be an
+  # invalid request, and the action's value is the authoritative one.
+  local attribution="${MANAGED_HEADER}: ${ATTRIBUTION_URL}"$'\n'"X-AnyRouter-Title: ${ATTRIBUTION_TITLE}"
+  local carried="${ANTHROPIC_CUSTOM_HEADERS-}"
+
+  if [ -n "$carried" ]; then
+    local filtered
+    filtered="$(printf '%s\n' "$carried" | grep -iv "^[[:space:]]*${MANAGED_HEADER}:" || true)"
+    if [ -n "$filtered" ]; then
+      export_multiline_var "ANTHROPIC_CUSTOM_HEADERS" "${filtered}"$'\n'"${attribution}"
     else
-      export_multiline_var "ANTHROPIC_CUSTOM_HEADERS" "HTTP-Referer: ${attribution}"
+      export_multiline_var "ANTHROPIC_CUSTOM_HEADERS" "$attribution"
     fi
+  else
+    export_multiline_var "ANTHROPIC_CUSTOM_HEADERS" "$attribution"
   fi
 
   log "AnyRouter configured (base_url=${ANYROUTER_BASE_URL}, model=${model:-<claude-code-default>})"

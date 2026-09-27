@@ -42,7 +42,6 @@ jobs:
         uses: duyet/claude-anyrouter-action@main
         with:
           anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
-          app_attribution: ${{ github.server_url }}/${{ github.repository }}
 
           # Let Claude read CI results so it can act on a red build.
           additional_permissions: |
