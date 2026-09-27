@@ -89,29 +89,65 @@ assert_eq "https://anyrouter.dev/api/v1" "$(print_env_var "$ENV_FILE" ANTHROPIC_
   "the gateway is still configured"
 
 echo
-echo "== app attribution =="
-run_configure ANYROUTER_APP_ATTRIBUTION="https://myapp.com"
-assert_status 0 "$STATUS" "succeeds with app attribution"
-assert_eq "HTTP-Referer: https://myapp.com" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
-  "app attribution is sent as HTTP-Referer"
+echo "== app attribution is always GitHub Actions =="
+run_configure
+assert_status 0 "$STATUS" "succeeds"
+assert_eq "HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "traffic is attributed to GitHub Actions with no configuration"
+
+# The action sends a fixed referer and title, so these must be present even
+# alongside a workflow that sets its own.
+run_configure ANYROUTER_MODEL=""
+assert_eq "HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "attribution is emitted independently of the model setting"
+
+echo
+echo "== attribution records the originating repository =="
+run_configure ANYROUTER_REPO_REF="https://github.com/duyet/monorepo"
+assert_status 0 "$STATUS" "succeeds with a repo ref"
+assert_eq "HTTP-Referer: https://github.com/features/actions?ref=https://github.com/duyet/monorepo
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "the repo is appended as a ref query parameter"
+
+run_configure ANYROUTER_REPO_REF="https://github.com/acme/api"
+assert_contains "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "?ref=https://github.com/acme/api" "a different repo yields a different referer"
+
+# The ref is untrusted input from the event context, so a newline in it would
+# let an attacker inject a second variable into the environment file.
+run_configure ANYROUTER_REPO_REF="https://github.com/acme/api
+ANTHROPIC_API_KEY=injected"
+assert_status 1 "$STATUS" "rejects a repo ref containing a newline"
+assert_contains "$OUT" "ANYROUTER_REPO_REF must not contain newlines" "reports the newline injection"
+assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_API_KEY)" "no variable is injected by a rejected ref"
 
 echo
 echo "== app attribution merges with existing custom headers =="
-run_configure \
-  ANYROUTER_APP_ATTRIBUTION="https://myapp.com" \
-  ANTHROPIC_CUSTOM_HEADERS="X-AnyRouter-Title: My App
+run_configure ANTHROPIC_CUSTOM_HEADERS="X-AnyRouter-Source: github-actions
 X-AnyRouter-Categories: cli-agent"
 assert_status 0 "$STATUS" "succeeds when merging custom headers"
-assert_eq "X-AnyRouter-Title: My App
+assert_eq "X-AnyRouter-Source: github-actions
 X-AnyRouter-Categories: cli-agent
-HTTP-Referer: https://myapp.com" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
-  "existing headers are preserved and HTTP-Referer is appended"
+HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "workflow headers are preserved and attribution is appended"
 
 echo
-echo "== no attribution header when unset =="
-run_configure
-assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
-  "ANTHROPIC_CUSTOM_HEADERS is left unset by default"
+echo "== a workflow-supplied HTTP-Referer does not duplicate =="
+run_configure ANTHROPIC_CUSTOM_HEADERS="HTTP-Referer: https://someone-else.example
+X-AnyRouter-Source: github-actions"
+assert_status 0 "$STATUS" "succeeds when a referer is already set"
+assert_eq "X-AnyRouter-Source: github-actions
+HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "the stale referer is replaced rather than sent twice"
+
+run_configure ANTHROPIC_CUSTOM_HEADERS="  http-referer: https://someone-else.example"
+assert_eq "HTTP-Referer: https://github.com/features/actions
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "a differently-cased referer is also replaced"
 
 echo
 echo "== required input validation =="
@@ -131,7 +167,7 @@ assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_API_KEY)" "no variable is in
 
 echo
 echo "== exactly the expected variables are written =="
-run_configure ANYROUTER_APP_ATTRIBUTION="https://myapp.com"
+run_configure
 assert_eq "ANTHROPIC_AUTH_TOKEN
 ANTHROPIC_BASE_URL
 ANTHROPIC_CUSTOM_HEADERS

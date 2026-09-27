@@ -58,10 +58,16 @@ assert_eq "inputs.use_oauth != 'true'" \
   "step 1 is skipped when use_oauth is true"
 
 STEP1_ENV="$(eval_yaml '" ".join(sorted(doc["runs"]["steps"][0]["env"]))')"
-for var in ANYROUTER_API_KEY ANYROUTER_BASE_URL ANYROUTER_MODEL ANYROUTER_APP_ATTRIBUTION; do
+for var in ANYROUTER_API_KEY ANYROUTER_BASE_URL ANYROUTER_MODEL ANYROUTER_REPO_REF; do
   assert_contains "$STEP1_ENV" "$var" "step 1 passes $var to the script"
 done
 assert_eq "4" "$(eval_yaml 'len(doc["runs"]["steps"][0]["env"])')" "step 1 forwards exactly 4 variables"
+
+# The repo ref comes from the event context, so the action derives it rather
+# than making each caller repeat it.
+assert_eq '${{ github.server_url }}/${{ github.repository }}' \
+  "$(eval_yaml 'doc["runs"]["steps"][0]["env"]["ANYROUTER_REPO_REF"]')" \
+  "the repo ref is derived from the GitHub context"
 
 echo
 echo "== step 2: Run Claude Code =="
@@ -93,13 +99,17 @@ assert_eq "anyrouter/auto" \
 assert_eq "false" \
   "$(eval_yaml 'doc["inputs"]["use_oauth"]["default"]')" "use_oauth default"
 
-for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions app_attribution bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
+for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
   assert_eq "False" \
     "$(eval_yaml 'doc["inputs"]["'"$optional"'"].get("required", False)')" \
     "$optional is optional"
 done
 
-assert_eq "16" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 16 inputs"
+assert_eq "15" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 15 inputs"
+
+# Attribution is not configurable: it is always GitHub Actions.
+assert_eq "False" "$(eval_yaml '"app_attribution" in doc["inputs"]')" \
+  "app_attribution is not an input (attribution is always GitHub Actions)"
 
 echo
 echo "== outputs =="
@@ -129,5 +139,19 @@ for file in README.md LICENSE .gitignore examples/example-interactive.yml exampl
     _fail "$file exists and is non-empty" "missing or empty"
   fi
 done
+
+echo
+echo "== this repo dogfoods the action =="
+SELF_WORKFLOW="$REPO_ROOT/.github/workflows/claude.yml"
+if [ -s "$SELF_WORKFLOW" ]; then
+  _pass ".github/workflows/claude.yml exists"
+  # A drifting self-workflow would silently stop exercising the action.
+  assert_contains "$(cat "$SELF_WORKFLOW")" "uses: duyet/claude-anyrouter-action@main" \
+    "the self-workflow uses this action"
+  assert_contains "$(cat "$SELF_WORKFLOW")" "anyrouter_api_key: \${{ secrets.ANYROUTER_API_KEY }}" \
+    "the self-workflow supplies the credential from a secret"
+else
+  _fail ".github/workflows/claude.yml exists" "missing or empty"
+fi
 
 summary "test-action-validation"

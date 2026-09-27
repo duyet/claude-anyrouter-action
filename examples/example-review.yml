@@ -29,11 +29,10 @@ jobs:
         uses: duyet/claude-anyrouter-action@main
         with:
           anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
-          app_attribution: ${{ github.server_url }}/${{ github.repository }}
 
           # Pin a specific model instead of the gateway's auto router, so review
           # cost and behaviour stay predictable.
-          model: anyrouter/auto
+          # model: 'anthropic/claude-sonnet-5'
 
           prompt: |
             Review this pull request for correctness, security, and regressions.

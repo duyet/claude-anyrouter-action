@@ -46,11 +46,6 @@ inputs:
     required: false
     default: ""
 
-  app_attribution:
-    description: "App URL to attribute this traffic to in AnyRouter's public rankings, sent as the HTTP-Referer header. See https://docs.anyrouter.dev/features/app-attribution. Leave empty to send no attribution header."
-    required: false
-    default: ""
-
   # --- Passthrough inputs for anthropics/claude-code-action ---
   # These are forwarded verbatim to the wrapped action so callers do not need
   # to know which underlying action is in use.
@@ -100,7 +95,7 @@ runs:
         ANYROUTER_API_KEY: ${{ inputs.anyrouter_api_key }}
         ANYROUTER_BASE_URL: ${{ inputs.anyrouter_base_url }}
         ANYROUTER_MODEL: ${{ inputs.model }}
-        ANYROUTER_APP_ATTRIBUTION: ${{ inputs.app_attribution }}
+        ANYROUTER_REPO_REF: ${{ github.server_url }}/${{ github.repository }}
       run: "${{ github.action_path }}/scripts/configure-anyrouter.sh"
 
     - name: Run Claude Code
