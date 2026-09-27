@@ -1,9 +1,16 @@
 # Automated pull request review using the review preset.
 #
 # The preset supplies the review prompt, the turn limit, and `actions: read`, so
-# this is the shortest useful workflow in the repo. Because the review body is
-# attacker-controlled, the job keeps read-only permissions and Claude has no way
-# to push changes or post comments.
+# this is the shortest useful workflow in the repo.
+#
+# The review body is attacker-controlled, so the job keeps `contents: read` and
+# `pull-requests: read`. Note that these scope GITHUB_TOKEN and the checkout,
+# not Claude itself: the action exchanges an OIDC token for a GitHub App token
+# whose real scope comes from that app's installation permissions on the repo.
+# To stop Claude from writing at all, narrow the app's installation.
+#
+# `id-token: write` is what makes the action run. Without it the OIDC exchange
+# fails and the job errors out.
 
 name: Claude PR Review (AnyRouter, preset)
 
@@ -20,6 +27,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
