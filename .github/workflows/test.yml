@@ -23,3 +23,6 @@ jobs:
 
       - name: Verify AnyRouter environment mapping
         run: ./tests/test-env-mapping.sh
+
+      - name: Run all tests
+        run: ./tests/run-all.sh

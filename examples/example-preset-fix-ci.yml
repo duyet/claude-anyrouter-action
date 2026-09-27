@@ -1,0 +1,40 @@
+# Repair failing CI using the fix-ci preset.
+#
+# Runs on failure rather than on demand, so a red build gets an attempt at a fix
+# before a human is paged. Grant contents: write so the fix can be pushed; the
+# preset only asks for actions: read, which is what lets Claude read the logs.
+
+name: Claude Fix CI (AnyRouter, preset)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    # Skip the run entirely when the base branch is broken, so a changeset
+    # upstream does not trigger a fix aimed at unrelated failures.
+    if: github.event.pull_request.head.sha != github.event.pull_request.base.sha
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Fix failing checks
+        uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          preset: fix-ci
+
+          # pin a model instead of the gateway's auto router, so a fix commit is
+          # reproducible
+          # model: 'anthropic/claude-sonnet-5'

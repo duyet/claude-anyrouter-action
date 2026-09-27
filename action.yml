@@ -46,6 +46,11 @@ inputs:
     required: false
     default: ""
 
+  preset:
+    description: "Task preset, which supplies the prompt, CLI arguments, and permissions that task normally needs. One of 'default' (forward your own inputs, the empty default), 'review' (pull request review), 'fix-ci' (repair failing checks), or 'explain' (describe the changes). Any input you set yourself overrides the preset."
+    required: false
+    default: "default"
+
   # --- Passthrough inputs for anthropics/claude-code-action ---
   # These are forwarded verbatim to the wrapped action so callers do not need
   # to know which underlying action is in use.
@@ -98,13 +103,23 @@ runs:
         ANYROUTER_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
       run: "${{ github.action_path }}/scripts/configure-anyrouter.sh"
 
+    - name: Resolve task preset
+      id: preset
+      shell: bash
+      env:
+        PRESET: ${{ inputs.preset }}
+        PRESET_PROMPT: ${{ inputs.prompt }}
+        PRESET_CLAUDE_ARGS: ${{ inputs.claude_args }}
+        PRESET_ADDITIONAL_PERMISSIONS: ${{ inputs.additional_permissions }}
+      run: "${{ github.action_path }}/scripts/resolve-preset.sh"
+
     - name: Run Claude Code
       id: claude
       uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1
       with:
-        prompt: ${{ inputs.prompt }}
-        claude_args: ${{ inputs.claude_args }}
-        additional_permissions: ${{ inputs.additional_permissions }}
+        prompt: ${{ steps.preset.outputs.prompt }}
+        claude_args: ${{ steps.preset.outputs.claude_args }}
+        additional_permissions: ${{ steps.preset.outputs.additional_permissions }}
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         bot_id: ${{ inputs.bot_id }}
         bot_name: ${{ inputs.bot_name }}

@@ -39,6 +39,38 @@ jobs:
 
 See [`examples/`](./examples) for interactive and code-review workflows.
 
+## Presets
+
+A preset picks a kind of task with one value, supplying the prompt, CLI
+arguments, and permissions that task normally needs:
+
+```yaml
+      - uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          preset: review
+```
+
+| Preset | Task | Grants |
+| --- | --- | --- |
+| `default` | Forwards your own inputs. Claude does what the comment asked. | – |
+| `review` | Review the pull request for correctness and security, posting inline comments without editing files. | `actions: read` |
+| `fix-ci` | Find failing checks, read their logs, and fix the cause. | `actions: read` |
+| `explain` | Describe the changes and what a reviewer should look at. | – |
+
+**A preset only fills inputs you left empty.** Anything you set explicitly wins,
+so a preset is a set of defaults, not an override:
+
+```yaml
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          preset: review
+          prompt: 'Only check the migration in src/db.'
+```
+
+An unknown preset fails the step with the list of valid names rather than
+silently falling back.
+
 ## Inputs
 
 | Input | Required | Default | Description |
@@ -51,6 +83,7 @@ See [`examples/`](./examples) for interactive and code-review workflows.
 | `prompt` | no | `""` | Instructions. Empty uses the comment that tagged Claude. |
 | `claude_args` | no | `""` | Extra [Claude Code CLI arguments](https://code.claude.com/docs/en/cli-reference). |
 | `additional_permissions` | no | `""` | Extra GitHub permissions, e.g. `actions: read`. |
+| `preset` | no | `default` | Task preset. See [Presets](#presets). |
 | `bot_id` | no | `""` | Bot user id for PR review comments. |
 | `bot_name` | no | `""` | Bot name for PR review comments. |
 | `plugins` | no | `""` | Newline-separated Claude Code plugins to install. |
@@ -60,7 +93,9 @@ See [`examples/`](./examples) for interactive and code-review workflows.
 | `settings` | no | `""` | Claude Code settings as JSON or a path to a settings file. |
 
 The last eight are forwarded verbatim to the wrapped action, so a workflow can
-point at this action without knowing which action is underneath.
+point at this action without knowing which action is underneath. `prompt`,
+`claude_args`, and `additional_permissions` are routed through the preset step
+first, so a preset can supply them when you have not.
 
 ## Outputs
 
@@ -158,14 +193,16 @@ to this repo's tests, which assert the pin.
 ## Development
 
 ```bash
+./tests/run-all.sh                  # everything
 ./tests/test-action-validation.sh   # action.yml structure and the pinned commit
 ./tests/test-env-mapping.sh         # executes the env script and asserts output
+./tests/test-presets.sh             # executes the preset script and asserts output
 ```
 
-`tests/test-env-mapping.sh` runs `scripts/configure-anyrouter.sh` against a
-throwaway environment file, so the mapping is verified by execution rather than
-by grepping the YAML. Both scripts are dependency-free apart from `python3`
-(for YAML and environment-file parsing) and `jq` is not required.
+`test-env-mapping.sh` and `test-presets.sh` execute the scripts against a
+throwaway output file, so their behaviour is verified by running them rather
+than by grepping YAML. All three are dependency-free apart from `python3` (for
+YAML and environment-file parsing); `jq` is not required.
 
 Both run in CI on every push and pull request.
 

@@ -1,0 +1,39 @@
+# Automated pull request review using the review preset.
+#
+# The preset supplies the review prompt, the turn limit, and `actions: read`, so
+# this is the shortest useful workflow in the repo. Because the review body is
+# attacker-controlled, the job keeps read-only permissions and Claude has no way
+# to push changes or post comments.
+
+name: Claude PR Review (AnyRouter, preset)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Review
+        uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+          preset: review
+
+          # A preset only fills inputs left empty, so overriding the prompt here
+          # narrows the review without giving up the preset's turn limit.
+          # prompt: |
+          #   Review only the database migrations in src/db.
+          #   Report anything that could lock or lose data.

@@ -42,9 +42,10 @@ fi
 echo
 echo "== composite run shape =="
 assert_eq "composite" "$(eval_yaml 'doc["runs"]["using"]')" "runs.using is composite"
-assert_eq "2" "$(eval_yaml 'len(doc["runs"]["steps"])')" "action has exactly 2 steps"
+assert_eq "3" "$(eval_yaml 'len(doc["runs"]["steps"])')" "action has exactly 3 steps"
 assert_eq "Configure AnyRouter" "$(eval_yaml 'doc["runs"]["steps"][0]["name"]')" "step 1 is Configure AnyRouter"
-assert_eq "Run Claude Code" "$(eval_yaml 'doc["runs"]["steps"][1]["name"]')" "step 2 is Run Claude Code"
+assert_eq "Resolve task preset" "$(eval_yaml 'doc["runs"]["steps"][1]["name"]')" "step 2 resolves the preset"
+assert_eq "Run Claude Code" "$(eval_yaml 'doc["runs"]["steps"][2]["name"]')" "step 3 is Run Claude Code"
 
 echo
 echo "== step 1: Configure AnyRouter =="
@@ -70,24 +71,42 @@ assert_eq '${{ github.server_url }}/${{ github.repository }}' \
   "the repo URL is derived from the GitHub context"
 
 echo
-echo "== step 2: Run Claude Code =="
-assert_eq "anthropics/claude-code-action@$PINNED_SHA" \
-  "$(eval_yaml 'doc["runs"]["steps"][1]["uses"].split("#")[0].strip()')" \
-  "step 2 uses the wrapped action pinned to an immutable commit"
-assert_eq "claude" "$(eval_yaml 'doc["runs"]["steps"][1]["id"]')" "step 2 has id 'claude' for output wiring"
+echo "== step 2: Resolve task preset =="
+assert_contains "$(eval_yaml 'doc["runs"]["steps"][1]["run"]')" "scripts/resolve-preset.sh" \
+  "step 2 delegates to the preset script"
+assert_eq "preset" "$(eval_yaml 'doc["runs"]["steps"][1]["id"]')" "step 2 has id 'preset' for output wiring"
+for var in PRESET PRESET_PROMPT PRESET_CLAUDE_ARGS PRESET_ADDITIONAL_PERMISSIONS; do
+  assert_contains "$(eval_yaml '" ".join(sorted(doc["runs"]["steps"][1]["env"]))')" "$var" \
+    "step 2 passes $var to the script"
+done
 
-for passthrough in prompt claude_args additional_permissions claude_code_oauth_token bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
+echo
+echo "== step 3: Run Claude Code =="
+assert_eq "anthropics/claude-code-action@$PINNED_SHA" \
+  "$(eval_yaml 'doc["runs"]["steps"][2]["uses"].split("#")[0].strip()')" \
+  "step 3 uses the wrapped action pinned to an immutable commit"
+assert_eq "claude" "$(eval_yaml 'doc["runs"]["steps"][2]["id"]')" "step 3 has id 'claude' for output wiring"
+
+for passthrough in claude_code_oauth_token bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
   assert_eq '${{ inputs.'"$passthrough"' }}' \
-    "$(eval_yaml 'doc["runs"]["steps"][1]["with"]["'"$passthrough"'"]')" \
-    "step 2 forwards $passthrough"
+    "$(eval_yaml 'doc["runs"]["steps"][2]["with"]["'"$passthrough"'"]')" \
+    "step 3 forwards $passthrough"
+done
+
+# These three come from the preset step, not straight from the caller's inputs,
+# so a preset can supply them.
+for preset_driven in prompt claude_args additional_permissions; do
+  assert_eq '${{ steps.preset.outputs.'"$preset_driven"' }}' \
+    "$(eval_yaml 'doc["runs"]["steps"][2]["with"]["'"$preset_driven"'"]')" \
+    "step 3 takes $preset_driven from the resolved preset"
 done
 
 # The wrapped action's own `model` input is deprecated and no longer read at the
 # pinned commit (src/entrypoints/run.ts reads ANTHROPIC_MODEL instead), so
 # forwarding it would be a silent no-op.
 assert_eq "None" \
-  "$(eval_yaml 'doc["runs"]["steps"][1]["with"].get("model")')" \
-  "step 2 does not forward the deprecated model input"
+  "$(eval_yaml 'doc["runs"]["steps"][2]["with"].get("model")')" \
+  "step 3 does not forward the deprecated model input"
 
 echo
 echo "== inputs =="
@@ -98,14 +117,16 @@ assert_eq "anyrouter/auto" \
   "$(eval_yaml 'doc["inputs"]["model"]["default"]')" "model default"
 assert_eq "false" \
   "$(eval_yaml 'doc["inputs"]["use_oauth"]["default"]')" "use_oauth default"
+assert_eq "default" \
+  "$(eval_yaml 'doc["inputs"]["preset"]["default"]')" "preset defaults to the pass-through"
 
-for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
+for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions preset bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
   assert_eq "False" \
     "$(eval_yaml 'doc["inputs"]["'"$optional"'"].get("required", False)')" \
     "$optional is optional"
 done
 
-assert_eq "15" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 15 inputs"
+assert_eq "16" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 16 inputs"
 
 # Attribution is not configurable: it is always GitHub Actions.
 assert_eq "False" "$(eval_yaml '"app_attribution" in doc["inputs"]')" \
@@ -132,11 +153,52 @@ else
   _fail "scripts/configure-anyrouter.sh parses" "$(bash -n "$SCRIPT" 2>&1)"
 fi
 
-for file in README.md LICENSE CHANGELOG.md .gitignore examples/example-interactive.yml examples/example-review.yml; do
+for file in README.md LICENSE CHANGELOG.md .gitignore \
+  examples/example-interactive.yml examples/example-review.yml \
+  examples/example-preset-review.yml examples/example-preset-fix-ci.yml; do
   if [ -s "$REPO_ROOT/$file" ]; then
     _pass "$file exists and is non-empty"
   else
     _fail "$file exists and is non-empty" "missing or empty"
+  fi
+done
+
+echo
+echo "== preset script and tests =="
+if [ -x "$REPO_ROOT/scripts/resolve-preset.sh" ]; then
+  _pass "scripts/resolve-preset.sh is executable"
+else
+  _fail "scripts/resolve-preset.sh is executable" "not executable, or missing"
+fi
+
+if bash -n "$REPO_ROOT/scripts/resolve-preset.sh" 2>/dev/null; then
+  _pass "scripts/resolve-preset.sh parses"
+else
+  _fail "scripts/resolve-preset.sh parses" "$(bash -n "$REPO_ROOT/scripts/resolve-preset.sh" 2>&1)"
+fi
+
+# The documented preset names must match what the script accepts, or the README
+# promises a preset that fails at runtime. Checked by running the script rather
+# than by matching its case labels, which is the authoritative answer.
+DOC_PRESET_OUT="$(mktemp)"
+if PRESET="" GITHUB_OUTPUT="$DOC_PRESET_OUT" \
+  bash "$REPO_ROOT/scripts/resolve-preset.sh" >/dev/null 2>&1; then
+  _pass "the default preset resolves"
+else
+  _fail "the default preset resolves" "script exited non-zero"
+fi
+rm -f "$DOC_PRESET_OUT"
+
+for name in default review fix-ci explain; do
+  if grep -qE "^\| \`$name\` \|" "$REPO_ROOT/README.md"; then
+    DOC_OUT="$(mktemp)"
+    if PRESET="$name" GITHUB_OUTPUT="$DOC_OUT" \
+      bash "$REPO_ROOT/scripts/resolve-preset.sh" >/dev/null 2>&1; then
+      _pass "the documented '$name' preset resolves"
+    else
+      _fail "the documented '$name' preset resolves" "documented in README but rejected by the script"
+    fi
+    rm -f "$DOC_OUT"
   fi
 done
 
