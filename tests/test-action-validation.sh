@@ -101,6 +101,15 @@ for preset_driven in prompt claude_args additional_permissions; do
     "step 3 takes $preset_driven from the resolved preset"
 done
 
+# The wrapped action's auth check (base-action/src/validate-env.ts) accepts
+# ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, or workload identity. It does not
+# accept ANTHROPIC_AUTH_TOKEN, which is what the gateway really uses, so the key
+# also has to reach the wrapped action as `anthropic_api_key` or every run dies
+# with "Environment variable validation failed".
+assert_eq "\${{ inputs.use_oauth != 'true' && inputs.anyrouter_api_key || '' }}" \
+  "$(eval_yaml 'doc["runs"]["steps"][2]["with"]["anthropic_api_key"]')" \
+  "step 3 forwards the key so the wrapped action can authenticate"
+
 # The wrapped action's own `model` input is deprecated and no longer read at the
 # pinned commit (src/entrypoints/run.ts reads ANTHROPIC_MODEL instead), so
 # forwarding it would be a silent no-op.
