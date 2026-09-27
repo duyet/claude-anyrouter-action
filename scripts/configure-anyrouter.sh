@@ -17,6 +17,7 @@
 #   ANYROUTER_BASE_URL    Anthropic-compatible base URL
 #   ANYROUTER_MODEL       model id, may be empty to leave Claude Code's default
 #   GITHUB_ENV            path to the job environment file
+#   ANYROUTER_REPO_REF    repository URL recorded in the attribution referer
 #
 # Optional environment:
 #   ANTHROPIC_CUSTOM_HEADERS    pre-existing headers, merged rather than replaced
@@ -35,6 +36,20 @@ readonly SCRIPT_NAME="configure-anyrouter"
 readonly ATTRIBUTION_URL="https://github.com/features/actions"
 readonly ATTRIBUTION_TITLE="GitHub Actions"
 readonly MANAGED_HEADER="HTTP-Referer"
+
+# The repository the run belongs to, appended to the attribution URL as a
+# `ref` query parameter so the originating repository is readable in AnyRouter's
+# request logs.
+build_attribution_url() {
+  local repo_ref="${1-}"
+
+  if [ -z "$repo_ref" ]; then
+    printf '%s' "$ATTRIBUTION_URL"
+    return
+  fi
+
+  printf '%s?ref=%s' "$ATTRIBUTION_URL" "$repo_ref"
+}
 
 log() {
   printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
@@ -82,6 +97,14 @@ export_multiline_var() {
       ;;
   esac
 
+  # Newlines are legitimate here (header lists are multi-line), but a value
+  # assembled from untrusted input must not be able to forge a second entry.
+  case "$value" in
+    *$'\r'*)
+      die "$name must not contain carriage returns"
+      ;;
+  esac
+
   {
     printf '%s<<EOF\n' "$name"
     printf '%s\n' "$value"
@@ -89,10 +112,25 @@ export_multiline_var() {
   } >>"$GITHUB_ENV"
 }
 
+# Reject values that span lines. Used for inputs that are interpolated into a
+# multi-line environment-file entry, where an embedded newline would forge a
+# second variable.
+require_single_line() {
+  local name="$1"
+  local value="${2-}"
+
+  case "$value" in
+    *$'\n'* | *$'\r'*)
+      die "$name must not contain newlines"
+      ;;
+  esac
+}
+
 main() {
   require "ANYROUTER_API_KEY" "${ANYROUTER_API_KEY-}"
   require "ANYROUTER_BASE_URL" "${ANYROUTER_BASE_URL-}"
   require "GITHUB_ENV" "${GITHUB_ENV-}"
+  require_single_line "ANYROUTER_REPO_REF" "${ANYROUTER_REPO_REF-}"
 
   # The gateway credential becomes ANTHROPIC_AUTH_TOKEN, which Claude Code sends
   # as `Authorization: Bearer <token>`. ANTHROPIC_API_KEY would be sent as
@@ -127,7 +165,7 @@ main() {
   #
   # The managed header is stripped first: sending HTTP-Referer twice would be an
   # invalid request, and the action's value is the authoritative one.
-  local attribution="${MANAGED_HEADER}: ${ATTRIBUTION_URL}"$'\n'"X-AnyRouter-Title: ${ATTRIBUTION_TITLE}"
+  local attribution="${MANAGED_HEADER}: $(build_attribution_url "${ANYROUTER_REPO_REF-}")"$'\n'"X-AnyRouter-Title: ${ATTRIBUTION_TITLE}"
   local carried="${ANTHROPIC_CUSTOM_HEADERS-}"
 
   if [ -n "$carried" ]; then

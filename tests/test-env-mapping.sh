@@ -104,6 +104,26 @@ X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM
   "attribution is emitted independently of the model setting"
 
 echo
+echo "== attribution records the originating repository =="
+run_configure ANYROUTER_REPO_REF="https://github.com/duyet/monorepo"
+assert_status 0 "$STATUS" "succeeds with a repo ref"
+assert_eq "HTTP-Referer: https://github.com/features/actions?ref=https://github.com/duyet/monorepo
+X-AnyRouter-Title: GitHub Actions" "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "the repo is appended as a ref query parameter"
+
+run_configure ANYROUTER_REPO_REF="https://github.com/acme/api"
+assert_contains "$(print_env_var "$ENV_FILE" ANTHROPIC_CUSTOM_HEADERS)" \
+  "?ref=https://github.com/acme/api" "a different repo yields a different referer"
+
+# The ref is untrusted input from the event context, so a newline in it would
+# let an attacker inject a second variable into the environment file.
+run_configure ANYROUTER_REPO_REF="https://github.com/acme/api
+ANTHROPIC_API_KEY=injected"
+assert_status 1 "$STATUS" "rejects a repo ref containing a newline"
+assert_contains "$OUT" "ANYROUTER_REPO_REF must not contain newlines" "reports the newline injection"
+assert_eq "" "$(print_env_var "$ENV_FILE" ANTHROPIC_API_KEY)" "no variable is injected by a rejected ref"
+
+echo
 echo "== app attribution merges with existing custom headers =="
 run_configure ANTHROPIC_CUSTOM_HEADERS="X-AnyRouter-Source: github-actions
 X-AnyRouter-Categories: cli-agent"

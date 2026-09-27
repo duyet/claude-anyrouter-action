@@ -56,6 +56,7 @@ runs:
         ANYROUTER_API_KEY: ${{ inputs.anyrouter_api_key }}
         ANYROUTER_BASE_URL: ${{ inputs.anyrouter_base_url }}
         ANYROUTER_MODEL: ${{ inputs.model }}
+        ANYROUTER_REPO_REF: ${{ github.server_url }}/${{ github.repository }}
       run: "${{ github.action_path }}/scripts/configure-anyrouter.sh"
 
     - name: Run Claude Code
