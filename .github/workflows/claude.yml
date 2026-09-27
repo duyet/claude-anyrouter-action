@@ -14,11 +14,14 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
+  # Mention-driven interactive session, unchanged.
   claude:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -44,3 +47,29 @@ jobs:
           # Lets Claude read the test results of this repo's own runs.
           additional_permissions: |
             actions: read
+
+  # Unattended review: every PR gets reviewed without waiting for an @claude.
+  auto-review:
+    # The workflow also fires on comment events, so scope the job to PRs.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    # Pushes re-trigger `synchronize`; a superseded review is wasted spend.
+    concurrency:
+      group: claude-auto-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Review
+        uses: duyet/claude-anyrouter-action@main
+        with:
+          anyrouter_api_key: ${{ secrets.ANYROUTER_API_KEY }}
+
+          # Supplies the review prompt, the turn limit, and `actions: read`.
+          preset: review

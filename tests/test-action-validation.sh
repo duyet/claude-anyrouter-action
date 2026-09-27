@@ -245,9 +245,27 @@ if [ -s "$RP_CONFIG" ] && [ -s "$RP_MANIFEST" ]; then
   # A version disagreement between the two files produces a wrong tag.
   assert_eq "$(python3 -c "import json;print(json.load(open('$RP_CONFIG'))['packages']['.']['changelog-path'])")" \
     "CHANGELOG.md" "config points at the changelog this repo has"
-  assert_eq "0.1.0" \
-    "$(python3 -c "import json;print(json.load(open('$RP_MANIFEST'))['.'])")" \
-    "manifest starts at the initial version"
+  # The manifest records the version already released, so it has to track the
+  # changelog rather than sit at a fixed number: release-please bumps both files
+  # together, and a manifest behind the changelog makes it re-tag a release that
+  # already shipped.
+  if python3 -c "
+import json,re,sys
+manifest=json.load(open('$RP_MANIFEST'))['.']
+if not re.fullmatch(r'\d+\.\d+\.\d+', manifest):
+    print('not a release version: '+manifest); sys.exit(1)
+text=open('$REPO_ROOT/CHANGELOG.md',encoding='utf-8').read()
+m=re.search(r'^##\s+\[?(\d+\.\d+\.\d+)', text, re.M)
+if not m:
+    print('no released version heading in CHANGELOG.md'); sys.exit(1)
+if m.group(1) != manifest:
+    print('manifest is '+manifest+', CHANGELOG.md latest is '+m.group(1)); sys.exit(1)
+" 2>/dev/null; then
+    _pass "manifest tracks the latest released version"
+  else
+    _fail "manifest tracks the latest released version" \
+      "manifest must match the newest version heading in CHANGELOG.md"
+  fi
 
   if python3 -c "
 import json,sys
