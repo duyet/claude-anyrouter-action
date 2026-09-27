@@ -51,6 +51,16 @@ See [`examples/`](./examples) for interactive and code-review workflows.
 | `prompt` | no | `""` | Instructions. Empty uses the comment that tagged Claude. |
 | `claude_args` | no | `""` | Extra [Claude Code CLI arguments](https://code.claude.com/docs/en/cli-reference). |
 | `additional_permissions` | no | `""` | Extra GitHub permissions, e.g. `actions: read`. |
+| `bot_id` | no | `""` | Bot user id for PR review comments. |
+| `bot_name` | no | `""` | Bot name for PR review comments. |
+| `plugins` | no | `""` | Newline-separated Claude Code plugins to install. |
+| `plugin_marketplaces` | no | `""` | Newline-separated plugin marketplace Git URLs. |
+| `show_full_output` | no | `false` | Full JSON output in logs. **May expose secrets.** |
+| `assignee_trigger` | no | `""` | Assignee login that triggers the issue-plan flow. |
+| `settings` | no | `""` | Claude Code settings as JSON or a path to a settings file. |
+
+The last eight are forwarded verbatim to the wrapped action, so a workflow can
+point at this action without knowing which action is underneath.
 
 ## Outputs
 
