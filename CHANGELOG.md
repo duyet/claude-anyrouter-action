@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.2](https://github.com/duyet/claude-anyrouter-action/compare/v0.1.1...v0.1.2) (2026-09-27)
+
+
+### ✨ Features
+
+* review every PR in this repo without an [@claude](https://github.com/claude) mention ([#4](https://github.com/duyet/claude-anyrouter-action/issues/4)) ([e4c0d5c](https://github.com/duyet/claude-anyrouter-action/commit/e4c0d5c144a40c9e4dc05c03083fcf403aaea189))
+
+
+### 🐛 Bug Fixes
+
+* forward the gateway key to the wrapped action ([#7](https://github.com/duyet/claude-anyrouter-action/issues/7)) ([cbab0f3](https://github.com/duyet/claude-anyrouter-action/commit/cbab0f31c60aa380ddd0cab597a090edf0e5bf4f))
+
 ## [0.1.1](https://github.com/duyet/claude-anyrouter-action/compare/v0.1.0...v0.1.1) (2026-09-27)
 
 
