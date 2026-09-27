@@ -70,7 +70,7 @@ assert_eq "anthropics/claude-code-action@$PINNED_SHA" \
   "step 2 uses the wrapped action pinned to an immutable commit"
 assert_eq "claude" "$(eval_yaml 'doc["runs"]["steps"][1]["id"]')" "step 2 has id 'claude' for output wiring"
 
-for passthrough in prompt claude_args additional_permissions claude_code_oauth_token; do
+for passthrough in prompt claude_args additional_permissions claude_code_oauth_token bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
   assert_eq '${{ inputs.'"$passthrough"' }}' \
     "$(eval_yaml 'doc["runs"]["steps"][1]["with"]["'"$passthrough"'"]')" \
     "step 2 forwards $passthrough"
@@ -93,13 +93,13 @@ assert_eq "anyrouter/auto" \
 assert_eq "false" \
   "$(eval_yaml 'doc["inputs"]["use_oauth"]["default"]')" "use_oauth default"
 
-for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions app_attribution; do
+for optional in use_oauth claude_code_oauth_token prompt claude_args additional_permissions app_attribution bot_id bot_name plugins plugin_marketplaces show_full_output assignee_trigger settings; do
   assert_eq "False" \
     "$(eval_yaml 'doc["inputs"]["'"$optional"'"].get("required", False)')" \
     "$optional is optional"
 done
 
-assert_eq "9" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 9 inputs"
+assert_eq "16" "$(eval_yaml 'len(doc["inputs"])')" "action declares exactly 16 inputs"
 
 echo
 echo "== outputs =="

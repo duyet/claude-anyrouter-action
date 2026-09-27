@@ -51,6 +51,45 @@ inputs:
     required: false
     default: ""
 
+  # --- Passthrough inputs for anthropics/claude-code-action ---
+  # These are forwarded verbatim to the wrapped action so callers do not need
+  # to know which underlying action is in use.
+
+  bot_id:
+    description: "GitHub bot user ID (used by the wrapped action for PR review comments)."
+    required: false
+    default: ""
+
+  bot_name:
+    description: "GitHub bot name (used by the wrapped action for PR review comments)."
+    required: false
+    default: ""
+
+  plugins:
+    description: "Newline-separated list of Claude Code plugins to install."
+    required: false
+    default: ""
+
+  plugin_marketplaces:
+    description: "Newline-separated list of plugin marketplace Git URLs."
+    required: false
+    default: ""
+
+  show_full_output:
+    description: "Show full JSON output from Claude Code (WARNING: may expose secrets in logs)."
+    required: false
+    default: "false"
+
+  assignee_trigger:
+    description: "Login of the assignee that triggers the issue-plan flow."
+    required: false
+    default: ""
+
+  settings:
+    description: "Claude Code settings as JSON string or path to settings JSON file."
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
@@ -72,6 +111,13 @@ runs:
         claude_args: ${{ inputs.claude_args }}
         additional_permissions: ${{ inputs.additional_permissions }}
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        bot_id: ${{ inputs.bot_id }}
+        bot_name: ${{ inputs.bot_name }}
+        plugins: ${{ inputs.plugins }}
+        plugin_marketplaces: ${{ inputs.plugin_marketplaces }}
+        show_full_output: ${{ inputs.show_full_output }}
+        assignee_trigger: ${{ inputs.assignee_trigger }}
+        settings: ${{ inputs.settings }}
 
 outputs:
   conclusion:
